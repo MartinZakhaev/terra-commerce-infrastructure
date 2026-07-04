@@ -1,0 +1,22 @@
+name: Infrastructure Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare local environment
+        run: cp .env.example .env
+      - name: Validate Compose
+        run: docker compose config
