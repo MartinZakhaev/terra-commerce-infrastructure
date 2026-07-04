@@ -1,0 +1,141 @@
+name: terra-commerce
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-terra_commerce}
+      POSTGRES_USER: ${POSTGRES_USER:-terra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terra-local-only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-terra} -d ${POSTGRES_DB:-terra_commerce}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [terra]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [terra]
+
+  commerce-api:
+    profiles: ["apps"]
+    build:
+      context: ../commerce
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      TC_ENVIRONMENT: local
+      TC_POSTGRES_DSN: postgres://${POSTGRES_USER:-terra}:${POSTGRES_PASSWORD:-terra-local-only}@postgres:5432/${POSTGRES_DB:-terra_commerce}
+      TC_REDIS_URL: redis://redis:6379/0
+      TC_COMMERCE_JWT_SECRET: ${TC_COMMERCE_JWT_SECRET:-local-jwt-secret-change-before-shared-use}
+      TC_COMMERCE_COOKIE_SECRET: ${TC_COMMERCE_COOKIE_SECRET:-local-cookie-secret-change-before-shared-use}
+      TC_STOREFRONT_CORS: http://demo.shop.localhost
+      TC_ADMIN_CORS: http://platform.localhost,http://demo.admin.localhost
+      TC_AUTH_CORS: http://platform.localhost,http://demo.admin.localhost,http://demo.shop.localhost
+    command: ["pnpm", "start"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [terra]
+
+  commerce-worker:
+    profiles: ["apps"]
+    build:
+      context: ../commerce
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      TC_ENVIRONMENT: local
+      TC_POSTGRES_DSN: postgres://${POSTGRES_USER:-terra}:${POSTGRES_PASSWORD:-terra-local-only}@postgres:5432/${POSTGRES_DB:-terra_commerce}
+      TC_REDIS_URL: redis://redis:6379/0
+      TC_COMMERCE_JWT_SECRET: ${TC_COMMERCE_JWT_SECRET:-local-jwt-secret-change-before-shared-use}
+      TC_COMMERCE_COOKIE_SECRET: ${TC_COMMERCE_COOKIE_SECRET:-local-cookie-secret-change-before-shared-use}
+      TC_RESERVATION_EXPIRY_MINUTES: 30
+      TC_RESERVATION_RECONCILIATION_GRACE_SECONDS: 120
+    command: ["pnpm", "worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [terra]
+
+  gateway:
+    profiles: ["apps"]
+    build:
+      context: ../gateway
+    restart: unless-stopped
+    environment:
+      TC_ENVIRONMENT: local
+      TC_GATEWAY_LISTEN_ADDR: :8080
+      TC_GATEWAY_REQUEST_TIMEOUT_MS: 15000
+      TC_GATEWAY_SHUTDOWN_TIMEOUT_MS: 30000
+      TC_COMMERCE_INTERNAL_URL: http://commerce-api:9000
+    depends_on:
+      - commerce-api
+    networks: [terra]
+
+  superadmin-web:
+    profiles: ["apps"]
+    build:
+      context: ../superadmin-web
+    restart: unless-stopped
+    networks: [terra]
+
+  tenant-admin-web:
+    profiles: ["apps"]
+    build:
+      context: ../tenant-admin-web
+    restart: unless-stopped
+    networks: [terra]
+
+  storefront-web:
+    profiles: ["apps"]
+    build:
+      context: ../storefront-web
+    restart: unless-stopped
+    environment:
+      NUXT_PUBLIC_API_BASE: /api/v1
+    networks: [terra]
+
+  caddy:
+    profiles: ["apps"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - gateway
+      - superadmin-web
+      - tenant-admin-web
+      - storefront-web
+    networks: [terra]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  terra:
+    driver: bridge
