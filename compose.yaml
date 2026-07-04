@@ -36,6 +36,7 @@ services:
 
   commerce-api:
     profiles: ["apps"]
+    image: terra-commerce-commerce:local
     build:
       context: ../commerce
     restart: unless-stopped
@@ -59,8 +60,8 @@ services:
 
   commerce-worker:
     profiles: ["apps"]
-    build:
-      context: ../commerce
+    image: terra-commerce-commerce:local
+    pull_policy: never
     restart: unless-stopped
     environment:
       NODE_ENV: development
@@ -73,6 +74,8 @@ services:
       TC_RESERVATION_RECONCILIATION_GRACE_SECONDS: 120
     command: ["pnpm", "worker"]
     depends_on:
+      commerce-api:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
@@ -81,6 +84,7 @@ services:
 
   gateway:
     profiles: ["apps"]
+    image: terra-commerce-gateway:local
     build:
       context: ../gateway
     restart: unless-stopped
@@ -96,6 +100,7 @@ services:
 
   superadmin-web:
     profiles: ["apps"]
+    image: terra-commerce-superadmin-web:local
     build:
       context: ../superadmin-web
     restart: unless-stopped
@@ -103,6 +108,7 @@ services:
 
   tenant-admin-web:
     profiles: ["apps"]
+    image: terra-commerce-tenant-admin-web:local
     build:
       context: ../tenant-admin-web
     restart: unless-stopped
@@ -110,6 +116,7 @@ services:
 
   storefront-web:
     profiles: ["apps"]
+    image: terra-commerce-storefront-web:local
     build:
       context: ../storefront-web
     restart: unless-stopped
