@@ -1,0 +1,33 @@
+{
+  auto_https off
+}
+
+http://platform.localhost {
+  handle /api/* {
+    reverse_proxy gateway:8080
+  }
+
+  handle {
+    reverse_proxy superadmin-web:80
+  }
+}
+
+http://*.admin.localhost {
+  handle /api/* {
+    reverse_proxy gateway:8080
+  }
+
+  handle {
+    reverse_proxy tenant-admin-web:80
+  }
+}
+
+http://*.shop.localhost {
+  handle /api/* {
+    reverse_proxy gateway:8080
+  }
+
+  handle {
+    reverse_proxy storefront-web:3000
+  }
+}
